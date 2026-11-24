@@ -1,0 +1,131 @@
+GROUP SORTER
+============
+
+A helper for WhatsApp communities. When someone posts a job, an event or a
+grant in the wrong group, it replies with a reminder or moves the post to the
+right group, so the admins do not have to.
+
+
+WHAT YOU NEED
+-------------
+
+1. A computer (Windows or Mac) that can stay switched on.
+2. A spare phone number with WhatsApp on it. This becomes the bot.
+   Do not use your personal number. WhatsApp does not officially allow bots
+   in groups, so there is a small chance the bot's number gets blocked.
+3. About 15 minutes.
+
+
+SETTING IT UP
+-------------
+
+Step 1. Install Node.js (free, one time only)
+   Go to https://nodejs.org and download the version marked "LTS".
+   Open the downloaded file and keep clicking Next until it finishes.
+
+Step 2. Start the bot
+   Windows: double-click   Start on Windows
+   Mac:     double-click   Start on Mac
+
+   The first start takes a minute or two. A window with text opens, and then
+   a page called Group Sorter opens in your web browser.
+
+Step 3. Follow the four steps on that page
+   1. Scan the code with the spare phone, the same way you link WhatsApp Web:
+      WhatsApp > Settings > Linked devices > Link a device.
+      Then, from your own phone, make the bot's number an admin in every
+      group you want sorted.
+   2. Paste an AI key. Create one at https://console.anthropic.com
+      (sign up, add a little credit under Billing, then create a key under
+      API keys). The bot uses it to understand what each post is about.
+      You pay Anthropic for what the bot uses.
+   3. Pick which group is for jobs, which is for events, and so on.
+      Tick your main group under "Other groups to check".
+   4. Choose what the bot does, then press Save settings.
+
+   The bot starts on "Only keep a record": it sends nothing to the groups
+   and just lists what it would have done at the bottom of the page. Watch
+   that list for a day or two. When its judgement looks right, switch to
+   "Reply with a reminder" or "Move the post" and press Save settings.
+
+That is all. The big sign at the top of the page turns blue and says
+"Watching ... groups" when everything is working.
+
+
+GOOD TO KNOW
+------------
+
+* The bot only works while its window is open and the computer is awake.
+  Set the computer so it does not go to sleep. Closing the window stops
+  the bot. Double-click the Start file to start it again. You do not need
+  to scan the code again.
+
+* To open the page later, go to http://localhost:3210 in the browser on
+  the same computer.
+
+* The "Pause the bot" button on the page stops it checking posts without
+  closing anything.
+
+* The bot leaves these alone: ordinary conversation, very short messages,
+  voice notes, stickers, polls, and posts by group admins (you can change
+  the last one on the page).
+
+* It never removes a post before it has safely reposted it.
+
+* The text of posts and any posters in the groups you choose are sent to
+  Anthropic's AI service to be read. Nothing else leaves this computer.
+  The settings, the AI key and the WhatsApp link are stored in the "data"
+  folder inside this folder. Anyone who can open that folder can use them,
+  so do not share it.
+
+
+IF SOMETHING GOES WRONG
+-----------------------
+
+Windows says "Windows protected your PC"
+   Click "More info", then "Run anyway".
+
+Mac says the file "cannot be opened"
+   Open System Settings > Privacy & Security, scroll down, and click
+   "Open Anyway". On older Macs: right-click the file and choose Open.
+
+It keeps saying Node.js is not installed
+   Restart the computer after installing Node.js and try again.
+
+"First-time setup could not finish"
+   Check the internet connection and double-click the Start file again.
+
+The code will not scan, or the page is stuck on "Starting up"
+   Check the internet connection. If it is still stuck, close the bot's
+   window, delete the folder  data > whatsapp-session  and start again.
+
+The bot is linked but does nothing
+   Check the sign at the top of the page. It says what is missing.
+   Also check that a new post is longer than a few words, and that it was
+   not posted by an admin.
+
+The bot can remind but not remove posts
+   Its number is not an admin in that group. Make it an admin.
+
+Moving to another computer
+   Copy this whole folder, including the "data" folder, and start it there.
+   Run it on one computer only.
+
+
+FOR DEVELOPERS
+--------------
+
+Node 20+. "npm ci" then "npm start". "npm test" runs the test suite, which
+uses a stand-in WhatsApp connection and a stand-in AI service.
+
+   src/index.js       starts everything
+   src/bot.js         WhatsApp connection (Baileys), reading posts, acting
+   src/classifier.js  the AI call and its prompt
+   src/router.js      the decision: is this post misplaced, and where to
+   src/extract.js     gets text and images out of WhatsApp messages
+   src/server.js      the local setup page's server (this computer only)
+   src/store.js       settings and activity record, kept in data/
+   public/index.html  the setup page
+
+Environment variables: PORT (default 3210), GROUP_SORTER_DATA (data folder),
+GROUP_SORTER_NO_BROWSER=1 (do not open the browser), ANTHROPIC_BASE_URL.
