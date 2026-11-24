@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Group Sorter</title>
+<style>
+  :root {
+    --bg: #EEF2F6;
+    --ink: #15212F;
+    --muted: #566475;
+    --line: #CBD4DE;
+    --field: #FFFFFF;
+    --sign: #17479E;
+    --sign-ink: #FFFFFF;
+    --go: #1A7A52;
+    --caution: #F5B51F;
+    --caution-ink: #231A00;
+    --stop: #B8342B;
+    --display: "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+    --body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #0E151E;
+      --ink: #E7ECF2;
+      --muted: #9BA9B9;
+      --line: #2B394A;
+      --field: #162130;
+      --sign: #2A5FC0;
+      --go: #3DAA7B;
+      --stop: #E8695F;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    padding: 1.5rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 1rem/1.55 var(--body);
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1, h2, .board-status { font-family: var(--display); font-weight: 600; letter-spacing: 0.005em; }
+  p { margin: 0 0 0.75rem; max-width: 62ch; }
+  .muted { color: var(--muted); }
+  .small { font-size: 0.875rem; }
+  a { color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* The signboard: one glance tells you whether the bot is working. */
+  .board {
+    background: var(--sign);
+    color: var(--sign-ink);
+    border-radius: 16px;
+    padding: 1.6rem 1.75rem 1.5rem;
+    outline: 2px solid currentColor;
+    outline-offset: -9px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.25rem 1rem;
+    align-items: start;
+  }
+  .board.caution { background: var(--caution); color: var(--caution-ink); }
+  .board h1 { margin: 0; font-size: 1rem; font-weight: 500; opacity: 0.9; }
+  .board-status { grid-column: 1; margin: 0.15rem 0 0.35rem; font-size: 1.9rem; line-height: 1.15; }
+  .board-detail { grid-column: 1 / -1; margin: 0; max-width: 60ch; }
+  .board-detail + .board-detail { margin-top: 0.35rem; }
+  .board .btn { grid-row: 1 / span 2; grid-column: 2; align-self: start; background: transparent; color: inherit; border: 1.5px solid currentColor; }
+
+  .btn {
+    font: 600 0.95rem/1.2 var(--body);
+    padding: 0.65rem 1.05rem;
+    border-radius: 8px;
+    border: 1.5px solid var(--sign);
+    background: var(--sign);
+    color: var(--sign-ink);
+    cursor: pointer;
+  }
+  .btn.quiet { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+  :focus-visible { outline: 3px solid var(--caution); outline-offset: 2px; }
+  .board :focus-visible { outline-color: currentColor; }
+
+  /* Steps are a real sequence, so they are numbered. */
+  .step {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    gap: 0 1rem;
+    padding: 1.9rem 0 1.6rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .step-number {
+    width: 2.5rem; height: 2.5rem;
+    display: grid; place-items: center;
+    border-radius: 8px;
+    border: 2px solid var(--sign);
+    color: var(--sign);
+    font: 600 1.25rem/1 var(--display);
+  }
+  .step.done .step-number { background: var(--go); border-color: var(--go); color: #fff; }
+  .step h2 { margin: 0.3rem 0 0.6rem; font-size: 1.35rem; line-height: 1.2; }
+  .step-body { min-width: 0; }
+
+  label, legend { font-weight: 600; }
+  input[type="text"], input[type="password"], select, textarea {
+    width: 100%;
+    font: inherit;
+    color: var(--ink);
+    background: var(--field);
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+  }
+  textarea { resize: vertical; min-height: 4.2rem; line-height: 1.4; field-sizing: content; }
+  fieldset { border: 0; padding: 0; margin: 0 0 1.25rem; min-width: 0; }
+  legend { padding: 0; margin-bottom: 0.5rem; }
+  .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+  .row > input { flex: 1 1 14rem; }
+  .note { margin: 0.5rem 0 0; font-size: 0.9rem; }
+  .note.ok { color: var(--go); }
+  .note.bad { color: var(--stop); }
+  .warn {
+    margin: 0.4rem 0 0;
+    padding-left: 0.6rem;
+    border-left: 4px solid var(--caution);
+    font-size: 0.875rem;
+  }
+
+  .qr-wrap { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; margin-top: 0.75rem; }
+  .qr { background: #fff; padding: 0.5rem; border-radius: 10px; border: 1.5px solid var(--line); width: 15rem; max-width: 100%; }
+  .qr img { display: block; width: 100%; height: auto; }
+  .qr-wrap ol { margin: 0; padding-left: 1.2rem; flex: 1 1 14rem; }
+  .qr-wrap li { margin-bottom: 0.35rem; }
+
+  .topic { padding: 0.9rem 0; border-top: 1px dashed var(--line); }
+  .topic:first-of-type { border-top: 0; padding-top: 0.25rem; }
+  .topic-top { display: grid; grid-template-columns: 11rem 1fr auto; gap: 0.6rem; align-items: end; }
+  .topic label { display: block; font-size: 0.875rem; margin-bottom: 0.2rem; }
+  .topic-desc { margin-top: 0.6rem; }
+  .link-btn { background: none; border: 0; padding: 0.55rem 0.2rem; font: inherit; color: var(--muted); text-decoration: underline; cursor: pointer; }
+
+  .checks { display: grid; gap: 0.15rem; }
+  .check { display: grid; grid-template-columns: 1.4rem 1fr; gap: 0.5rem; align-items: start; padding: 0.3rem 0; font-weight: 400; }
+  .check input { width: 1.15rem; height: 1.15rem; margin: 0.2rem 0 0; accent-color: var(--sign); }
+  .choice { padding: 0.55rem 0; }
+  .choice strong { display: block; }
+
+  details { margin: 0.5rem 0 1.25rem; }
+  summary { cursor: pointer; font-weight: 600; }
+  details .field { margin-top: 0.9rem; }
+  details label { display: block; margin-bottom: 0.2rem; }
+
+  .save-bar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+
+  .activity { padding-top: 1.9rem; }
+  .activity h2 { margin: 0 0 0.3rem; font-size: 1.35rem; }
+  .activity-head { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; flex-wrap: wrap; }
+  .log { list-style: none; margin: 0.9rem 0 0; padding: 0; }
+  .log li {
+    display: grid;
+    grid-template-columns: 4.6rem 1fr;
+    gap: 0.1rem 0.9rem;
+    padding: 0.7rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .log time { color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; padding-top: 0.1rem; }
+  .log .what { min-width: 0; overflow-wrap: anywhere; }
+  .log .quote { color: var(--muted); }
+  .tag {
+    display: inline-block;
+    margin-right: 0.5rem;
+    padding: 0.05rem 0.5rem;
+    border-radius: 5px;
+    font: 600 0.85rem/1.5 var(--display);
+    border: 1.5px solid var(--line);
+  }
+  .tag.moved { background: var(--go); border-color: var(--go); color: #fff; }
+  .tag.reminded { background: var(--sign); border-color: var(--sign); color: #fff; }
+  .tag.spotted { background: var(--caution); border-color: var(--caution); color: var(--caution-ink); }
+  .tag.error { border-color: var(--stop); color: var(--stop); }
+
+  @media (max-width: 34rem) {
+    body { padding: 1rem 0.9rem 3rem; }
+    .board { grid-template-columns: 1fr; padding: 1.4rem 1.4rem 1.3rem; }
+    .board .btn { grid-row: auto; grid-column: 1; justify-self: start; margin-top: 0.8rem; }
+    .board-status { font-size: 1.6rem; }
+    .step { grid-template-columns: 1fr; }
+    .step-number { margin-bottom: 0.5rem; }
+    .topic-top { grid-template-columns: 1fr; }
+    .log li { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <header class="board" id="board" aria-live="polite">
+    <h1>Group Sorter</h1>
+    <p class="board-status" id="boardStatus">Starting up</p>
+    <button class="btn" id="pauseBtn" type="button" hidden>Pause the bot</button>
+    <p class="board-detail" id="boardDetail"></p>
+    <p class="board-detail" id="boardProblem" hidden></p>
+  </header>
+
+  <section class="step" id="stepLink">
+    <div class="step-number" aria-hidden="true">1</div>
+    <div class="step-body">
+      <h2>Link the bot’s WhatsApp number</h2>
+      <div id="linkWaiting">
+        <p>Use a spare number for the bot, not your personal one. WhatsApp does not officially allow bots in groups, so there is a small chance the number gets blocked.</p>
+        <p class="muted" id="linkStatus">Getting a code from WhatsApp…</p>
+        <div class="qr-wrap" id="qrWrap" hidden>
+          <div class="qr"><img id="qrImg" alt="Code to scan with WhatsApp"></div>
+          <ol>
+            <li>Open WhatsApp on the bot’s phone.</li>
+            <li>Go to Settings, then Linked devices.</li>
+            <li>Tap Link a device and scan this code.</li>
+          </ol>
+        </div>
+      </div>
+      <div id="linkDone" hidden>
+        <p id="linkedAs"></p>
+        <p>Now make this number an admin in every group you want sorted. It needs to be an admin to remove a misplaced post.</p>
+        <button class="btn quiet" id="unlinkBtn" type="button">Unlink this number</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" id="stepKey">
+    <div class="step-number" aria-hidden="true">2</div>
+    <div class="step-body">
+      <h2>Add the AI key</h2>
+      <p>The bot asks Claude, an AI model, to read each post and work out what it is about. Create a key at console.anthropic.com under API keys, add a little credit there, and paste the key here. You pay Anthropic for what the bot uses.</p>
+      <div class="row">
+        <input type="password" id="keyInput" autocomplete="off" spellcheck="false" aria-label="AI key" placeholder="Paste the key, it starts with sk-ant-">
+        <button class="btn" id="keyBtn" type="button">Save and test key</button>
+      </div>
+      <p class="note" id="keyNote" hidden></p>
+    </div>
+  </section>
+
+  <section class="step" id="stepGroups">
+    <div class="step-number" aria-hidden="true">3</div>
+    <div class="step-body">
+      <h2>Say which group is for what</h2>
+      <p id="groupsEmpty" class="muted">Your groups will appear here once WhatsApp is linked.</p>
+      <fieldset>
+        <legend>Topics and their groups</legend>
+        <div id="topics"></div>
+        <button class="btn quiet" id="addTopicBtn" type="button">Add another topic</button>
+      </fieldset>
+      <fieldset id="watchField">
+        <legend>Other groups to check</legend>
+        <p class="muted small">Tick your main group and any other group where people post things that belong somewhere else.</p>
+        <div class="checks" id="watchList"></div>
+        <button class="link-btn" id="refreshGroupsBtn" type="button">Refresh the group list</button>
+      </fieldset>
+    </div>
+  </section>
+
+  <section class="step" id="stepMode">
+    <div class="step-number" aria-hidden="true">4</div>
+    <div class="step-body">
+      <h2>Choose what happens to a misplaced post</h2>
+      <fieldset>
+        <legend class="small muted">The bot will</legend>
+        <label class="check choice"><input type="radio" name="mode" value="watch">
+          <span><strong>Only keep a record</strong>Nothing is sent to the groups. The list below shows what the bot would have done. Good for checking its judgement first.</span></label>
+        <label class="check choice"><input type="radio" name="mode" value="nudge">
+          <span><strong>Reply with a reminder</strong>The bot replies to the post and asks the person to share it in the right group.</span></label>
+        <label class="check choice"><input type="radio" name="mode" value="move">
+          <span><strong>Move the post</strong>The bot reposts it in the right group with the person’s name, removes the original, and leaves a short note.</span></label>
+      </fieldset>
+      <fieldset>
+        <label for="threshold" style="display: block;">How sure the bot must be before it acts</label>
+        <select id="threshold" style="max-width: 24rem; margin-top: 0.3rem;">
+          <option value="0.9">Very sure (acts less often, fewer mistakes)</option>
+          <option value="0.8">Fairly sure (recommended)</option>
+          <option value="0.7">Somewhat sure (acts more often)</option>
+        </select>
+        <label class="check" style="margin-top: 0.7rem;"><input type="checkbox" id="skipAdmins"><span>Leave posts by group admins alone</span></label>
+      </fieldset>
+      <details>
+        <summary>Wording and advanced settings</summary>
+        <div class="field"><label for="nudgeText">Reminder message</label><textarea id="nudgeText"></textarea></div>
+        <div class="field"><label for="movedText">Note left behind after moving a post</label><textarea id="movedText"></textarea></div>
+        <div class="field"><label for="repostHeader">Line added above a moved post</label><input type="text" id="repostHeader"></div>
+        <p class="muted small" style="margin-top: 0.5rem;">You can use {name} for the person, {topic} for the topic, {group} for the right group, and {from} for the group it was posted in.</p>
+        <div class="field"><label for="model">AI model name</label><input type="text" id="model" spellcheck="false"></div>
+      </details>
+      <div class="save-bar">
+        <button class="btn" id="saveBtn" type="button">Save settings</button>
+        <span class="note" id="saveNote" role="status"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="activity">
+    <div class="activity-head">
+      <h2>What the bot has done</h2>
+      <label class="check small" style="padding: 0;"><input type="checkbox" id="hideLeft"><span>Hide posts it left alone</span></label>
+    </div>
+    <p class="muted" id="logEmpty">Nothing yet. Posts show up here as the bot checks them.</p>
+    <ul class="log" id="log"></ul>
+  </section>
+
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const FORM_KEYS = ['mode', 'threshold', 'skipAdmins', 'topics', 'watchGroupIds', 'nudgeText', 'movedText', 'repostHeader', 'model'];
+
+  let latest = null;     // last state received from the bot
+  let form = null;       // the settings being edited on this page
+  let dirty = false;
+  let groupsKey = '';
+  let logKey = '';
+
+  // ---------- talking to the bot ----------
+
+  async function getState() {
+    const res = await fetch('/api/state', { cache: 'no-store' });
+    return res.json();
+  }
+
+  async function post(path, body) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-group-sorter': '1' },
+      body: JSON.stringify(body || {}),
+    });
+    return res.json();
+  }
+
+  // ---------- small helpers ----------
+
+  function el(tag, props, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props || {})) {
+      if (key === 'class') node.className = value;
+      else if (key === 'text') node.textContent = value;
+      else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+      else if (value === true) node.setAttribute(key, '');
+      else if (value !== false && value != null) node.setAttribute(key, value);
+    }
+    for (const child of children) if (child != null) node.append(child);
+    return node;
+  }
+
+  const groupById = (id) => (latest?.groups || []).find((g) => g.id === id);
+  // The community name is only added when groups from more than one community are listed.
+  function groupLabel(g) {
+    const communities = new Set((latest?.groups || []).map((x) => x.community || ''));
+    return communities.size > 1 && g.community && g.community !== g.name ? `${g.name} (${g.community})` : g.name;
+  }
+
+  function markDirty() {
+    dirty = true;
+    $('saveNote').className = 'note';
+    $('saveNote').textContent = 'You have unsaved changes.';
+  }
+
+  function notAdminWarning(groupId) {
+    const g = groupById(groupId);
+    if (!g || g.botAdmin !== false) return null;
+    return el('p', { class: 'warn', text: 'The bot is not an admin in this group, so it can remind people here but cannot remove posts.' });
+  }
+
+  // ---------- the signboard ----------
+
+  function renderBoard() {
+    const s = latest;
+    const board = $('board');
+    let status;
+    let detail = '';
+    let caution = true;
+
+    const modeLine = {
+      watch: 'Keeping a record only. Nothing is sent to the groups.',
+      nudge: 'Replying with a reminder when a post is in the wrong group.',
+      move: 'Moving posts to the right group when they are in the wrong one.',
+    }[s.settings.mode];
+
+    if (s.connection === 'qr') {
+      status = 'Scan the code to link WhatsApp';
+      detail = 'Step 1 below shows the code.';
+    } else if (s.connection === 'reconnecting') {
+      status = 'Reconnecting to WhatsApp';
+      detail = 'This usually sorts itself out within a minute.';
+    } else if (s.connection !== 'connected') {
+      status = 'Starting up';
+      detail = 'Connecting to WhatsApp.';
+    } else if (s.settings.paused) {
+      status = 'Paused';
+      detail = 'The bot is not checking any posts.';
+    } else if (!s.settings.hasKey) {
+      status = 'Add the AI key';
+      detail = 'WhatsApp is linked. Step 2 below is next.';
+    } else if (s.watching === 0) {
+      status = 'Choose your groups';
+      detail = 'Step 3 below tells the bot which group is for what.';
+    } else {
+      caution = false;
+      status = s.watching === 1 ? 'Watching 1 group' : `Watching ${s.watching} groups`;
+      detail = modeLine;
+    }
+
+    board.classList.toggle('caution', caution);
+    $('boardStatus').textContent = status;
+    $('boardDetail').textContent = detail;
+
+    const problem = s.problem || (s.connection === 'connected' ? s.aiProblem : null);
+    $('boardProblem').hidden = !problem;
+    $('boardProblem').textContent = problem ? `Needs attention: ${problem}` : '';
+
+    const pause = $('pauseBtn');
+    pause.hidden = s.connection !== 'connected';
+    pause.textContent = s.settings.paused ? 'Resume the bot' : 'Pause the bot';
+  }
+
+  // ---------- step 1: link ----------
+
+  function renderLink() {
+    const s = latest;
+    const linked = s.connection === 'connected' || s.connection === 'reconnecting';
+    $('stepLink').classList.toggle('done', s.connection === 'connected');
+    $('linkWaiting').hidden = linked;
+    $('linkDone').hidden = !linked;
+    if (linked) {
+      const who = [s.me?.name, s.me?.number ? `+${s.me.number}` : ''].filter(Boolean).join(', ');
+      $('linkedAs').textContent = who ? `Linked to ${who}.` : 'Linked.';
+    } else {
+      $('qrWrap').hidden = !s.qr;
+      if (s.qr && $('qrImg').getAttribute('src') !== s.qr) $('qrImg').setAttribute('src', s.qr);
+      $('linkStatus').hidden = Boolean(s.qr);
+      $('linkStatus').textContent = s.problem || 'Getting a code from WhatsApp…';
+    }
+  }
+
+  // ---------- step 2: key ----------
+
+  function renderKey() {
+    const s = latest.settings;
+    $('stepKey').classList.toggle('done', s.hasKey);
+    if (s.hasKey && !$('keyInput').value) {
+      $('keyInput').placeholder = `A key is saved (it ends in ${s.keyEnding}). Paste a new one to replace it.`;
+    }
+  }
+
+  // ---------- step 3: topics and groups ----------
+
+  function groupSelect(topic) {
+    const select = el('select', {
+      onchange: (e) => {
+        topic.groupId = e.target.value;
+        // A group that becomes a topic's home no longer needs ticking separately.
+        form.watchGroupIds = form.watchGroupIds.filter((id) => id !== topic.groupId);
+        markDirty();
+        renderGroups();
+      },
+    });
+    select.append(el('option', { value: '', text: 'No group chosen' }));
+    const takenElsewhere = new Set(form.topics.filter((t) => t !== topic).map((t) => t.groupId));
+    const groups = latest.groups.slice();
+    // Keep a saved choice visible even if the group list has not loaded yet.
+    if (topic.groupId && !groups.some((g) => g.id === topic.groupId)) {
+      groups.push({ id: topic.groupId, name: 'Saved group (list not loaded yet)', community: '' });
+    }
+    for (const g of groups) {
+      if (takenElsewhere.has(g.id)) continue;
+      select.append(el('option', { value: g.id, text: groupLabel(g), selected: g.id === topic.groupId }));
+    }
+    select.value = topic.groupId || '';
+    return select;
+  }
+
+  function renderGroups() {
+    const hasGroups = latest.groups.length > 0;
+    $('groupsEmpty').hidden = hasGroups;
+
+    const box = $('topics');
+    box.replaceChildren();
+    form.topics.forEach((topic, index) => {
+      const nameId = `topicName${index}`;
+      const groupId = `topicGroup${index}`;
+      const descId = `topicDesc${index}`;
+      const name = el('input', {
+        type: 'text', id: nameId, value: topic.name, maxlength: '40',
+        oninput: (e) => { topic.name = e.target.value; markDirty(); },
+      });
+      const select = groupSelect(topic);
+      select.id = groupId;
+      const desc = el('textarea', {
+        id: descId, maxlength: '400',
+        oninput: (e) => { topic.description = e.target.value; markDirty(); },
+      });
+      desc.value = topic.description || '';
+      box.append(
+        el('div', { class: 'topic' },
+          el('div', { class: 'topic-top' },
+            el('div', null, el('label', { for: nameId, text: 'Topic' }), name),
+            el('div', null, el('label', { for: groupId, text: 'Its group' }), select),
+            el('button', {
+              class: 'link-btn', type: 'button', text: 'Remove',
+              'aria-label': `Remove the topic ${topic.name || index + 1}`,
+              onclick: () => { form.topics.splice(index, 1); markDirty(); renderGroups(); },
+            }),
+          ),
+          notAdminWarning(topic.groupId),
+          el('div', { class: 'topic-desc' },
+            el('label', { for: descId, text: 'What belongs there' }), desc),
+        ),
+      );
+    });
+
+    const homes = new Set(form.topics.map((t) => t.groupId).filter(Boolean));
+    const list = $('watchList');
+    list.replaceChildren();
+    const others = latest.groups.filter((g) => !homes.has(g.id));
+    $('watchField').hidden = !hasGroups;
+    for (const g of others) {
+      const checked = form.watchGroupIds.includes(g.id);
+      const input = el('input', {
+        type: 'checkbox', checked,
+        onchange: (e) => {
+          form.watchGroupIds = e.target.checked
+            ? [...new Set([...form.watchGroupIds, g.id])]
+            : form.watchGroupIds.filter((id) => id !== g.id);
+          markDirty();
+          renderGroups();
+        },
+      });
+      input.checked = checked;
+      const text = el('span', null, groupLabel(g));
+      if (g.adminsOnly) text.append(el('span', { class: 'muted', text: ' (only admins can post here)' }));
+      const row = el('label', { class: 'check' }, input, text);
+      list.append(row);
+      if (checked) {
+        const warning = notAdminWarning(g.id);
+        if (warning) list.append(warning);
+      }
+    }
+    if (hasGroups && others.length === 0) {
+      list.append(el('p', { class: 'muted small', text: 'Every group already has a topic.' }));
+    }
+    renderStepsDone();
+  }
+
+  function renderStepsDone() {
+    const s = latest.settings;
+    const homes = s.topics.filter((t) => t.groupId).length;
+    const groupsDone = homes > 0 && latest.watching >= 2;
+    $('stepGroups').classList.toggle('done', groupsDone);
+    $('stepMode').classList.toggle('done', groupsDone && s.hasKey && latest.connection === 'connected');
+  }
+
+  // ---------- step 4 and saving ----------
+
+  function fillForm() {
+    for (const input of document.querySelectorAll('input[name="mode"]')) input.checked = input.value === form.mode;
+    const options = [0.9, 0.8, 0.7];
+    const nearest = options.reduce((a, b) => (Math.abs(b - form.threshold) < Math.abs(a - form.threshold) ? b : a));
+    $('threshold').value = String(nearest);
+    $('skipAdmins').checked = form.skipAdmins;
+    $('nudgeText').value = form.nudgeText;
+    $('movedText').value = form.movedText;
+    $('repostHeader').value = form.repostHeader;
+    $('model').value = form.model;
+    renderGroups();
+  }
+
+  function wireForm() {
+    for (const input of document.querySelectorAll('input[name="mode"]')) {
+      input.addEventListener('change', () => { if (input.checked) { form.mode = input.value; markDirty(); } });
+    }
+    $('threshold').addEventListener('change', (e) => { form.threshold = Number(e.target.value); markDirty(); });
+    $('skipAdmins').addEventListener('change', (e) => { form.skipAdmins = e.target.checked; markDirty(); });
+    for (const id of ['nudgeText', 'movedText', 'repostHeader', 'model']) {
+      $(id).addEventListener('input', (e) => { form[id] = e.target.value; markDirty(); });
+    }
+
+    $('addTopicBtn').addEventListener('click', () => {
+      if (!form) return;
+      form.topics.push({ id: '', name: '', description: '', groupId: '' });
+      markDirty();
+      renderGroups();
+      document.getElementById(`topicName${form.topics.length - 1}`)?.focus();
+    });
+
+    $('saveBtn').addEventListener('click', async () => {
+      if (!form) return;
+      const note = $('saveNote');
+      const unnamed = form.topics.some((t) => !t.name.trim());
+      if (unnamed) {
+        note.className = 'note bad';
+        note.textContent = 'Give every topic a name, or remove the empty one.';
+        return;
+      }
+      $('saveBtn').disabled = true;
+      try {
+        const result = await post('/api/settings', form);
+        if (!result.ok) throw new Error();
+        apply(result.state, true);
+        note.className = 'note ok';
+        note.textContent = 'Settings saved.';
+      } catch {
+        note.className = 'note bad';
+        note.textContent = 'Settings were not saved. Check that the bot window is still open, then try again.';
+      }
+      $('saveBtn').disabled = false;
+    });
+
+    $('keyBtn').addEventListener('click', async () => {
+      const note = $('keyNote');
+      const apiKey = $('keyInput').value.trim();
+      note.hidden = false;
+      note.className = 'note';
+      note.textContent = 'Testing the key…';
+      $('keyBtn').disabled = true;
+      try {
+        const result = await post('/api/key', { apiKey });
+        if (result.ok) {
+          $('keyInput').value = '';
+          apply(result.state);
+          note.className = 'note ok';
+          note.textContent = 'Key saved. It works.';
+        } else {
+          note.className = 'note bad';
+          note.textContent = result.error || 'The key was not saved.';
+        }
+      } catch {
+        note.className = 'note bad';
+        note.textContent = 'The key was not saved. Check that the bot window is still open, then try again.';
+      }
+      $('keyBtn').disabled = false;
+    });
+
+    $('pauseBtn').addEventListener('click', async () => {
+      if (!latest) return;
+      const result = await post('/api/pause', { paused: !latest.settings.paused });
+      if (result.ok) apply(result.state);
+    });
+
+    $('unlinkBtn').addEventListener('click', async () => {
+      if (!confirm('Unlink this WhatsApp number? The bot stops until you scan a new code.')) return;
+      const result = await post('/api/unlink');
+      if (result.ok) apply(result.state);
+    });
+
+    $('refreshGroupsBtn').addEventListener('click', async () => {
+      const result = await post('/api/refresh-groups');
+      if (result.ok) apply(result.state);
+    });
+
+    $('hideLeft').addEventListener('change', () => { logKey = ''; renderLog(); });
+  }
+
+  // ---------- activity ----------
+
+  function when(t) {
+    const d = new Date(t);
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const today = new Date().toDateString() === d.toDateString();
+    return today ? time : `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${time}`;
+  }
+
+  const outcomeLabel = (item) => ({
+    moved: `Moved to ${item.to}`,
+    reminded: `Reminded, belongs in ${item.to}`,
+    spotted: `Belongs in ${item.to}`,
+    left: 'Left alone',
+    error: 'Problem',
+  }[item.outcome] || item.outcome);
+
+  function renderLog() {
+    const hide = $('hideLeft').checked;
+    const items = latest.activity.filter((item) => !(hide && item.outcome === 'left'));
+    const key = `${hide}|${latest.activity.length}|${latest.activity[0]?.t || 0}`;
+    if (key === logKey) return;
+    logKey = key;
+
+    $('logEmpty').hidden = items.length > 0;
+    $('logEmpty').textContent = latest.activity.length
+      ? 'Nothing to show. Every post checked so far was left alone.'
+      : 'Nothing yet. Posts show up here as the bot checks them.';
+    const list = $('log');
+    list.replaceChildren();
+    for (const item of items) {
+      const top = el('div', null, el('span', { class: `tag ${item.outcome}`, text: outcomeLabel(item) }));
+      if (item.note) top.append(el('span', { class: 'small muted', text: item.note }));
+      list.append(
+        el('li', null,
+          el('time', { text: when(item.t) }),
+          el('div', { class: 'what' },
+            top,
+            el('div', { class: 'quote small', text: `${item.sender} in ${item.group}: ${item.snippet}` }),
+          ),
+        ),
+      );
+    }
+  }
+
+  // ---------- putting it together ----------
+
+  function apply(state, resetForm) {
+    latest = state;
+    const firstTime = !form;
+    if (firstTime || resetForm) {
+      form = {};
+      for (const key of FORM_KEYS) form[key] = JSON.parse(JSON.stringify(state.settings[key]));
+      dirty = false;
+      fillForm();
+    }
+    const key = JSON.stringify(state.groups);
+    if (key !== groupsKey) {
+      groupsKey = key;
+      if (!firstTime && !resetForm) renderGroups();
+    }
+    renderBoard();
+    renderLink();
+    renderKey();
+    renderStepsDone();
+    renderLog();
+  }
+
+  async function tick() {
+    if (document.hidden) return;
+    try {
+      apply(await getState());
+    } catch {
+      $('board').classList.add('caution');
+      $('boardStatus').textContent = 'The bot is not running';
+      $('boardDetail').textContent = 'Open the Group Sorter folder and double-click the Start file, then reload this page.';
+      $('boardProblem').hidden = true;
+      $('pauseBtn').hidden = true;
+    }
+  }
+
+  wireForm();
+  tick();
+  setInterval(tick, 2500);
+  document.addEventListener('visibilitychange', tick);
+  window.addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+})();
+</script>
+</body>
+  </html>
